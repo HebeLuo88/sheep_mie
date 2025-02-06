@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>羊了个羊</title>
+    <style>
+        #game-board {
+            width: 400px;
+            height: 600px;
+            margin: 20px auto;
+            position: relative;
+        }
+
+        .tile {
+            width: 80px;
+            height: 80px;
+            position: absolute;
+            border: 2px solid #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .tile:hover {
+            transform: scale(1.1);
+            z-index: 100;
+        }
+
+        #status {
+            text-align: center;
+            font-size: 24px;
+            margin: 20px;
+        }
+
+        .slot {
+            background: #666;
+        }
+
+        #slot-container {
+            width: 400px;
+            height: 100px;
+            margin: 20px auto;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+        }
+
+        .slot {
+            width: 80px;
+            height: 80px;
+            border: 2px dashed #aaa;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        /* 添加卡槽动画 */
+        @keyframes slot-bounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        /* 添加方块点击反馈 */
+        .tile:active {
+            transform: scale(0.9) !important;
+        }
+
+        @keyframes slot-disappear {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 0; transform: scale(0.5); }
+        }
+    </style>
+</head>
+<body>
+    <div id="status">剩余方块：<span id="count">0</span></div>
+    <div id="game-board"></div>
+    <div id="slot-container">
+        <div class="slot" id="slot-0"></div>
+        <div class="slot" id="slot-1"></div>
+        <div class="slot" id="slot-2"></div>
+        <div class="slot" id="slot-3"></div>
+        <div class="slot" id="slot-4"></div>
+        <div class="slot" id="slot-5"></div>
+        <div class="slot" id="slot-6"></div>
+        <div class="slot" id="slot-7"></div>
+        <div class="slot" id="slot-8"></div>
+        <div class="slot" id="slot-9"></div>
+    </div>
+
+    <script>
+        const TYPES = ['🐑', '🌿', '🥕', '🎃', '🍎', '🌽'];
+        const LAYERS = 3;
+        const GRID_SIZE = 4;
+        let selectedTiles = [];
+        let slots = Array(10).fill(null);
+
+        function createGame() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            
+            // 创建三层堆叠的方块
+            for(let layer = 0; layer < LAYERS; layer++) {
+                for(let i = 0; i < GRID_SIZE; i++) {
+                    for(let j = 0; j < GRID_SIZE; j++) {
+                        const tile = document.createElement('div');
+                        tile.className = 'tile';
+                        tile.style.left = `${j * 90 + layer * 5}px`;
+                        tile.style.top = `${i * 90 + layer * 5}px`;
+                        tile.style.backgroundColor = `hsl(${Math.random()*360}, 70%, 70%)`;
+                        tile.dataset.type = TYPES[Math.floor(Math.random()*TYPES.length)];
+                        tile.dataset.layer = layer;
+                        tile.textContent = tile.dataset.type;
+                        
+                        tile.onclick = () => handleClick(tile);
+                        board.appendChild(tile);
+                    }
+                }
+            }
+            updateCount();
+        }
+
+        function handleClick(tile) {
+            // 更精确的点击位置检测
+            const rect = tile.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            
+            // 检测当前点击的方块是否是最顶层可见的
+            const topElement = document.elementFromPoint(centerX, centerY);
+            if (!tile.contains(topElement)) {
+                return; // 不显示alert避免干扰
+            }
+
+            // 寻找第一个空卡槽
+            const emptySlotIndex = slots.indexOf(null);
+            if (emptySlotIndex === -1) {
+                alert('卡槽已满！');
+                return;
+            }
+
+            // 更新卡槽状态和显示（添加动画效果）
+            slots[emptySlotIndex] = tile.dataset.type;
+            const slotElement = document.getElementById(`slot-${emptySlotIndex}`);
+            slotElement.textContent = tile.dataset.type;
+            slotElement.style.animation = 'slot-bounce 0.5s';
+            
+            // 移除动画结束后清除样式
+            slotElement.addEventListener('animationend', () => {
+                slotElement.style.animation = '';
+            });
+
+            // 移除方块并更新游戏状态
+            tile.style.opacity = '0'; // 渐隐效果
+            setTimeout(() => tile.remove(), 300);
+            updateLayers();
+            updateCount();
+            
+            // 立即检查消除（修复延迟问题）
+            checkSlotMatches();
+            checkWin();
+        }
+
+        function updateLayers() {
+            document.querySelectorAll('.tile').forEach(tile => {
+                const below = document.elementFromPoint(
+                    parseFloat(tile.style.left) + 40,
+                    parseFloat(tile.style.top) + 40
+                );
+                tile.dataset.layer = below === tile ? 0 : 1;
+            });
+        }
+
+        function updateCount() {
+            document.getElementById('count').textContent = 
+                document.querySelectorAll('.tile').length;
+        }
+
+        function checkWin() {
+            if (document.querySelectorAll('.tile').length === 0) {
+                setTimeout(() => alert('胜利！🎉'), 100);
+            }
+        }
+
+        function checkSlotMatches() {
+            let hasMatches = false;
+            
+            // 创建类型到位置的映射
+            const typeMap = new Map();
+            slots.forEach((type, index) => {
+                if (type) {
+                    if (!typeMap.has(type)) typeMap.set(type, []);
+                    typeMap.get(type).push(index);
+                }
+            });
+
+            // 检查所有类型的出现次数
+            typeMap.forEach((positions, type) => {
+                while (positions.length >= 3) {
+                    hasMatches = true;
+                    // 取出前三个位置进行消除
+                    const [a, b, c] = positions.splice(0, 3);
+                    
+                    // 清空卡槽
+                    slots[a] = null;
+                    slots[b] = null;
+                    slots[c] = null;
+                    
+                    // 更新显示（添加消除动画）
+                    [a, b, c].forEach(index => {
+                        const slot = document.getElementById(`slot-${index}`);
+                        slot.style.animation = 'slot-disappear 0.5s';
+                        slot.addEventListener('animationend', () => {
+                            slot.textContent = '';
+                            slot.style.animation = '';
+                        }, {once: true});
+                    });
+                }
+            });
+
+            // 如果有消除需要重新检查（处理多个三连情况）
+            if (hasMatches) {
+                setTimeout(checkSlotMatches, 500); // 等待动画完成
+            }
+        }
+
+        // 初始化游戏
+        createGame();
+    </script>
+</body>
+</html> 
